@@ -1,0 +1,26 @@
+---
+- hosts: es
+  remote_user: root
+  tasks: 
+    - copy:                                    #复制yum原 
+        src: /root/local.repo
+        dest: /etc/yum.repos.d/local.repo
+    - yum:                                     #安装elasticsearch数据库
+        name: elasticsearch
+        state: installed
+    - copy:                                    #复制elas配置文件
+        src: /root/elasticsearch.yml
+        dest: /etc/elasticsearch/elasticsearch.yml
+    - lineinfile:                              #修改配置文件  
+        path: "/etc/elasticsearch/elasticsearch.yml"
+        regexp: "^node.name"
+        line: "node.name: {{item}}"
+      with_items: ["es1","es2","es3","es4","es5"] #主机名for循环
+      tags: set          #标签
+      notify: abc        #触发节点
+   handlers:             #触发器 
+    - name: abc
+      service:           #启动服务 
+        name: elasticsearch.service
+        enabled: yes
+        state: restarted
