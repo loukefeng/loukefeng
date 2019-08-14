@@ -1,0 +1,175 @@
+1 pxc 集群 
+cd PXC
+1.yum -y install ./libev-4.15-1.el6.rf.x86_64.rpm 
+2.yum -y install ./percona-xtrabackup-24-2.4.13-1.el7.x86_64.rpm 
+3.yum -y install ./qpress-1.1-14.11.x86_64.rpm 
+4.tar -xf Percona-XtraDB-Cluster-5.7.25-31.35-r463-el7-x86_64-bundle.tar 
+5.yum -y install ./Percona-XtraDB-Cluster-*
+vim /etc/percona-xtradb-cluster.conf.d/mysqld.cnf
+vim /etc/percona-xtradb-cluster.conf.d/wsrep.cnf
+
+
+wsrep_log_conflicts
+
+# This changes how InnoDB autoincrement locks are managed and is a requirement for Galera
+innodb_autoinc_lock_mode=2
+
+# Node IP address
+wsrep_node_address=192.168.4.10
+# Cluster name
+wsrep_cluster_name=pxc-cluster3
+
+#If wsrep_node_name is not specified,  then system hostname will be used
+wsrep_node_name=pxc10
+
+#pxc_strict_mode allowed values: DISABLED,PERMISSIVE,ENFORCING,MASTER
+pxc_strict_mode=ENFORCING
+
+# SST method
+wsrep_sst_method=xtrabackup-v2
+
+#Authentication for SST method
+wsrep_sst_auth="sstuser:123456"
+
+
+6.systemctl start mysql@bootstrap.service
+
+ grep password /var/log/mysqld.log 
+  235  mysql -uroot -p"sj,mkOhHo89R"
+
+alter user root@localhost identified by "123qqq...A"
+grant reload,lock tables,relication client,process on *.* to sstuser@localhost identified by "123456"
+
+客户端: systemctl start mysqld
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+yum -y install java-1.8.0-openjdk
+213  tar -xf Mycat-server-1.6-RELEASE-20161028204710-linux.tar.gz 
+  214  mv mycat/ /usr/local/
+  215  yum -y install java-1.8.0-openjdk
+  216  cd /usr/local/mycat/
+  217  ls
+  218  vim conf/schema.xml 
+
+
+<?xml version="1.0"?>
+<!DOCTYPE mycat:schema SYSTEM "schema.dtd">
+<mycat:schema xmlns:mycat="http://io.mycat/">
+
+        <schema name="TESTDB" checkSQLschema="false" sqlMaxLimit="100">
+                <!-- auto sharding by id (long) -->
+                <table name="travelrecord" dataNode="dn1,dn2,dn3" rule="auto-sharding-long" />
+
+                <table name="company" primaryKey="ID" type="global" dataNode="dn1,dn2,dn3" />
+                <table name="goods" primaryKey="ID" type="global" dataNode="dn1,dn2,dn3" />
+                <table name="hotnews" primaryKey="ID" autoIncrement="true" dataNode="dn1,dn2,dn3"
+                           rule="mod-long" />
+                <table name="employee" primaryKey="ID" dataNode="dn1,dn2,dn3"
+                           rule="sharding-by-intfile" />
+                <table name="customer" primaryKey="ID" dataNode="dn1,dn2,dn3"
+                           rule="sharding-by-intfile">
+                        <childTable name="orders" primaryKey="ID" joinKey="customer_id"
+                                                parentKey="id">
+                                <childTable name="order_items" joinKey="order_id"
+                                                        parentKey="id" />
+                        </childTable>
+                        <childTable name="customer_addr" primaryKey="ID" joinKey="customer_id"
+                                                parentKey="id" />
+                </table>
+        </schema>
+        <dataNode name="dn1" dataHost="localhost1" database="db1" />
+        <dataNode name="dn2" dataHost="localhost2" database="db2" />
+        <dataNode name="dn3" dataHost="localhost3" database="db3" />
+        <dataHost name="localhost1" maxCon="1000" minCon="10" balance="0"
+                          writeType="0" dbType="mysql" dbDriver="native" switchType="1"  slaveThreshold="100">
+                <heartbeat>select user()</heartbeat>
+                <writeHost host="hostM1" url="192.168.4.6:3306" user="replues"
+                                   password="123qqq...A">
+                </writeHost>
+        </dataHost>
+        <dataHost name="localhost2" maxCon="1000" minCon="10" balance="0"
+                          writeType="0" dbType="mysql" dbDriver="native" switchType="1"  slaveThreshold="100">
+                <heartbeat>select user()</heartbeat>
+                <writeHost host="hostM2" url="192.168.4.8:3306" user="replues"
+                                   password="123qqq...A">
+                </writeHost>
+        </dataHost>
+        <dataHost name="localhost3" maxCon="1000" minCon="10" balance="0"
+                          writeType="0" dbType="mysql" dbDriver="native" switchType="1"  slaveThreshold="100">
+                <heartbeat>select user()</heartbeat>
+                <writeHost host="hostM3" url="192.168.4.10:3306" user="replues"
+                                   password="123qqq...A">
+                </writeHost>
+        </dataHost>
+
+bin/mycat start
+
+
+ss -nulatp | grep :8066
+
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+yum -y install haproxy
+
+vim /etc/haproxy/haproxy.cfg
+vim
+listen    haproxy 0.0.0.0:8066
+mode tcp
+server mycat1 192.168.4.4:8066 check inter 5s rise 2 fall 3
+server mycat2 192.168.4.5:8066 check inter 5s rise 2 fall 3
+srvtimeout 20000
+
+systemctl start haproxy.service
+
+
+-_____________________________________________________________----
+
+keepalived
+
+yum -y install keepalived.x86_64 
+  223  vim /etc/keepalived/keepalived.conf 
+  224  systemctl start keepalived.service 
+  225  systemctl start haproxy.service 
+
+iptables -F
+
+
+! Configuration File for keepalived
+
+global_defs {
+   notification_email {
+     acassen@firewall.loc
+     failover@firewall.loc
+     sysadmin@firewall.loc
+   }
+   notification_email_from Alexandre.Cassen@firewall.loc
+   smtp_server 192.168.200.1
+   smtp_connect_timeout 30
+   router_id LVS_DEVEL
+   vrrp_skip_check_adv_addr
+   vrrp_strict
+   vrrp_garp_interval 0
+   vrrp_gna_interval 0
+}
+
+vrrp_instance VI_1 {
+    state MASTER
+    interface eth0
+    virtual_router_id 51
+    priority 100
+    advert_int 1
+    authentication {
+        auth_type PASS
+        auth_pass 1111
+    }
+    virtual_ipaddress {
+        192.168.4.100/24
+    }
+}
+
+
+
+
